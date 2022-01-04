@@ -3,9 +3,11 @@ const { isUndefined, isEmpty } = require('lodash')
 const { AwesomeQR } = require("awesome-qr")
 const fs = require("fs")
 const path = require('path')
+const { v1 } = require('uuid')
 const Admin = require('../models/adminModel')
 const User = require("../models/userModel")
 const Coupon = require('../models/couponModel')
+const BatchNumber = require('../models/batchModel')
 const { JWT_SECRET: secret } = require('../configs')
 const { checkAndBundleNonEmptyFields } = require('../utils')
 module.exports.adminSignUp = async (req, res, next) => {
@@ -102,6 +104,38 @@ module.exports.adminSignIn = async (req, res, next) => {
     })
 }
 
+module.exports.updateAdminByAdmin = async (req, res, next) => {
+    let responseCode = 401
+    let message = ""
+    const adminId = req.params.id
+    const params = checkAndBundleNonEmptyFields(req.body)
+    try {
+        const admin = await Admin.findByIdAndUpdate(adminId, {
+            ...params
+        })
+        if (admin) {
+            res.status(200).json({
+                admin
+            })
+            return
+        } else {
+            responseCode = 404
+            message = `admin not found with id ${adminId}`
+        }
+    } catch (e) {
+        console.error(e)
+        responseCode = 500
+        message = "Internal server error"
+
+    }
+    res.status(responseCode).json({
+        message,
+        errors: {
+            message
+        }
+    })
+}
+
 module.exports.updateUserByAdmin = async (req, res, next) => {
     const id = req.params.id
     const finalUser = checkAndBundleNonEmptyFields(req.body)
@@ -109,15 +143,14 @@ module.exports.updateUserByAdmin = async (req, res, next) => {
     let message = ""
     if (!isEmpty(finalUser))
         try {
-            let user = await User.findById(id)
+            delete finalUser._id
+            let user = await User.findByIdAndUpdate(id, {
+                ...finalUser
+            })
             if (user) {
-                let user = {
-                    ...user._doc,
-                    ...finalUser
-                }
-                user = await User.updateOne(user)
                 res.status(200).json({
-                    message: "User updated successfully"
+                    message: "User updated successfully",
+                    user
                 })
                 return
             } else {
@@ -147,6 +180,7 @@ module.exports.listAllUsersByAdmin = async (req, res, next) => {
             message: "All users",
             users
         })
+        return
     } catch (e) {
         console.error(e)
         responseCode = 500
@@ -160,33 +194,73 @@ module.exports.listAllUsersByAdmin = async (req, res, next) => {
     })
 }
 
+module.exports.getCouponByProductDetails = async (req, res, next) => {
+    let responseCode = 401
+    let message = ""
+    let params = checkAndBundleNonEmptyFields(req.body)
+    try {
+        let coupons = await Coupon.find({
+            ...params
+        })
+
+        res.status(200).json({
+            coupons
+        })
+        return
+    } catch (e) {
+        console.error(e)
+        responseCode = 500
+        message = "Internal server error"
+
+    }
+    res.status(responseCode).json({
+        message,
+        errors: {
+            message
+        }
+    })
+}
+
 
 module.exports.generateCouponsByAdmin = async (req, res, next) => {
     responseCode = 401
     message = ""
-    const { name, value, quantity } = req.body
+    const { companyName, name, label, value, quantity, couponType } = req.body
+    let batchNumber = Date.now()
     try {
 
         let coupons = []
+        let batchNumberObj = new BatchNumber({
+            batchNumber,
+            companyName,
+            name,
+            couponType
+        })
+        batchNumberObj = await batchNumberObj.save()
+        batchNumber = batchNumberObj.batchNumber
         for (let i = 0; i < quantity; i++) {
             let coupon = new Coupon({
+                batchNumber,
+                companyName,
                 name,
-                value
+                label,
+                value,
+                couponType
             })
             coupon = await coupon.save()
             let couponName = `qr_code_${coupon._id}.png`
             let couponUrl = `qr_codes/${couponName}`
             const buffer = await new AwesomeQR({
                 text: `id=${coupon._id}&&name=${coupon.name}&&value=${coupon.value}`,
-                size: 150,
+                size: 200,
             }).draw();
+
             coupon = {
                 ...coupon._doc,
                 couponUrl
             }
 
-            // console.log(coupon)
-            await Coupon.findByIdAndUpdate(coupon.id, {
+            await Coupon.findByIdAndUpdate(coupon._id, {
                 couponUrl: couponUrl
             })
             fs.writeFileSync(couponUrl, buffer);
@@ -213,6 +287,59 @@ module.exports.generateCouponsByAdmin = async (req, res, next) => {
     })
 }
 
+module.exports.getBatchDetailsByProduct = async (req, res, next) => {
+    let responseCode = 401
+    let message = ""
+    let params = checkAndBundleNonEmptyFields(req.body)
+    try {
+        let batchList = await BatchNumber.find({
+            ...params
+        })
+        res.status(200).json({
+            batchList
+        })
+        return
+    } catch (e) {
+        console.error(e)
+        responseCode = 500
+        message = "Internal server error"
+
+    }
+    res.status(responseCode).json({
+        message,
+        errors: {
+            message
+        }
+    })
+}
+
+module.exports.getCouponsByBatchNumber = async (req, res, next) => {
+    let responseCode = 401
+    let message = ""
+    let params = checkAndBundleNonEmptyFields(req.body)
+    try {
+        let coupons = await Coupon.find({
+            ...params
+        })
+
+        res.status(200).json({
+            coupons
+        })
+        return
+    } catch (e) {
+        console.error(e)
+        responseCode = 500
+        message = "Internal server error"
+
+    }
+    res.status(responseCode).json({
+        message,
+        errors: {
+            message
+        }
+    })
+}
+
 module.exports.deleteAllCouponsByAdmin = async (req, res, next) => {
     const directory = 'qr_codes';
 
@@ -231,6 +358,7 @@ module.exports.deleteAllCouponsByAdmin = async (req, res, next) => {
         res.status(200).json({
             message: "All coupons deleted"
         })
+        return
     } catch (e) {
         console.error(e)
         responseCode = 500
@@ -255,27 +383,60 @@ module.exports.redeemCouponByAdmin = async (req, res, next) => {
         if (coupon) {
             let newCollected = parseInt(coupon.collectedPoints) - parseInt(newValue)
             message = "Coupon redeemed"
-            if (newCollected < 0) {
-                newCollected = coupon.collectedPoints
-                message = "Coupon cannot be redeemed as the user dont have sufficient balance"
-            }
+            newCollected = coupon.collectedPoints
             let newRedeemed = parseInt(coupon.redeemedPoints) + parseInt(newValue)
-            await User.findByIdAndUpdate(userId, {
-                collectedPoints: newCollected,
-                redeemedPoints: newRedeemed
-            })
-            coupon = await User.findById(userId)
-            res.status(200).message({
-                message,
-                user: coupon
-            })
+
+            if (coupon.collectedPoints >= newRedeemed) {
+                coupon = await User.findByIdAndUpdate(userId, {
+                    collectedPoints: newCollected,
+                    redeemedPoints: newRedeemed
+                })
+
+                res.status(200).json({
+                    message,
+                    user: coupon
+                })
+                return
+            } else {
+                message = `Redeemed points is ${parseInt(newCollected) - parseInt(coupon.collectedPoints)} greater than collected points`
+            }
+
         } else {
             responseCode = 404
-            message = `Coupon with code ${couponId} doesn't exists`
+            message = `Coupon with userId ${userId} doesn't exists`
         }
     } catch (e) {
         console.error(e)
         responseCode = 500
         message = "Internal server error"
     }
+
+    res.status(responseCode).json({
+        message,
+        errors: {
+            message
+        }
+    })
+}
+
+module.exports.listAllAdmins = async (req, res, next) => {
+    responseCode = 401
+    message = ""
+    try {
+        let admins = await Admin.find({})
+        res.status(200).json({
+            admins
+        })
+        return
+    } catch (e) {
+        console.error(e)
+        responseCode = 500
+        message = "Internal server error"
+    }
+    res.status(responseCode).json({
+        message,
+        errors: {
+            message
+        }
+    })
 }

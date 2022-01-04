@@ -9,7 +9,13 @@ const userSchema = Schema({
     phone: {
         type: String
     },
+    bankName: {
+        type: String
+    },
     bankAccountNumber: {
+        type: String
+    },
+    bankIfscCode: {
         type: String
     },
     password: {

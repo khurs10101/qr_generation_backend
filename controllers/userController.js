@@ -4,19 +4,31 @@ const User = require('../models/userModel')
 const Coupon = require('../models/couponModel')
 const { JWT_SECRET: secret, } = require('../configs')
 const e = require('express')
+const { checkAndBundleNonEmptyFields } = require('../utils')
 
 module.exports.userSignUp = async (req, res, next) => {
     let responseCode = 401
     let message = ""
-    const { name, phone, bankAccountNumber, password, city, states } = req.body
-    if (!isEmpty(name) && !isEmpty(phone) && !isEmpty(bankAccountNumber) && !isEmpty(password))
+    const { name, phone, bankName,
+        bankAccountNumber,
+        bankIfscCode, password,
+        city, states } = req.body
+    if (!isEmpty(name) &&
+        !isEmpty(phone) &&
+        !isEmpty(bankName) &&
+        !isEmpty(bankAccountNumber) &&
+        !isEmpty(bankIfscCode) &&
+        !isEmpty(password)
+    )
         try {
             let user = await User.findOne({
                 phone
             })
             if (!user) {
                 user = new User({
-                    name, phone, bankAccountNumber, password, city, states
+                    name, phone, bankName,
+                    bankAccountNumber, bankIfscCode,
+                    password, city, states
                 })
                 user = await user.save()
                 delete user.password
@@ -87,6 +99,34 @@ module.exports.userSignIn = async (req, res, next) => {
             responseCode = 500
             message = "Internal server error"
         }
+    res.status(responseCode).json({
+        message,
+        errors: {
+            message
+        }
+    })
+}
+
+module.exports.userUpdate = async (req, res, next) => {
+    let responseCode = 401
+    let message = ""
+    let userId = req.params.id
+    let params = checkAndBundleNonEmptyFields(req.body)
+    try {
+        let user = await User.findByIdAndUpdate(userId, {
+            ...params
+        })
+
+        res.status(200).json({
+            user
+        })
+        return
+    } catch (e) {
+        console.error(e)
+        responseCode = 500
+        message = "Internal server error"
+
+    }
     res.status(responseCode).json({
         message,
         errors: {
