@@ -23,13 +23,11 @@ mongoose.connect(MONGO_DB_LINK, { useNewUrlParser: true, useUnifiedTopology: tru
         console.log("mongodb failed: " + err)
     })
 
+
 app.use('/api/admins', adminRoutes)
 app.use('/api/users', userRoutes)
 app.use('/api/inventory', inventoryRoutes)
-app.use('/', (req, res, next) => {
-    res.send("Working as expected")
-    return
-})
+
 
 
 const server = http.createServer(app)

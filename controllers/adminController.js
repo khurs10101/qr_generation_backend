@@ -440,3 +440,29 @@ module.exports.listAllAdmins = async (req, res, next) => {
         }
     })
 }
+
+
+module.exports.deleteAdminByAdmin = async (req, res, next) => {
+    let responseCode = 401
+    let message = ""
+    const { adminId } = req.body
+    try {
+        const admin = await Admin.findByIdAndDelete(adminId)
+        res.status(200).json({
+            message: "Admin deleted successfully",
+            admin
+        })
+        return
+    } catch (e) {
+        console.error(e)
+        responseCode = 500
+        message = "Internal server error"
+
+    }
+    res.status(responseCode).json({
+        message,
+        errors: {
+            message
+        }
+    })
+}
